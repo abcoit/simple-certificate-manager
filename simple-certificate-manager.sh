@@ -28,6 +28,10 @@ STAGING=true
 LIVE=false
 DNS_PROVIDER=""  # Will be set by --dns-provider parameter (digitalocean, route53, or linode)
 
+# ACME server endpoints
+PROD_SERVER_URL="https://acme-v02.api.letsencrypt.org/directory"
+STAGING_SERVER_URL="https://acme-staging-v02.api.letsencrypt.org/directory"
+
 # Check if running on Ubuntu 24.04 LTS or above
 check_ubuntu() {
     if [[ -f /etc/os-release ]]; then
@@ -188,6 +192,32 @@ EOF
             log_success "Linode credentials configured"
             ;;
     esac
+}
+
+# Ensure existing lineage (if any) matches target environment; delete if server differs
+ensure_lineage_matches_environment() {
+    local hostname="$1"
+    local expected_server
+    local renewal_conf="$FMS_CERTBOT_PATH/renewal/$hostname.conf"
+
+    if [[ "$LIVE" == "true" ]]; then
+        expected_server="$PROD_SERVER_URL"
+    else
+        expected_server="$STAGING_SERVER_URL"
+    fi
+
+    if [[ -f "$renewal_conf" ]]; then
+        local configured_server
+        configured_server="$(grep -E '^server\s*=' "$renewal_conf" | awk -F'=' '{gsub(/^ *| *$/, \"\", $2); print $2}' || true)"
+        if [[ -n "$configured_server" ]] && [[ "$configured_server" != "$expected_server" ]]; then
+            log_info "ACME server mismatch for '$hostname' (found: $configured_server, expected: $expected_server) - deleting old lineage"
+            # Delete existing lineage so we can recreate it against the correct server
+            certbot delete --non-interactive --cert-name "$hostname" \
+                --config-dir "$FMS_CERTBOT_PATH" \
+                --work-dir "$FMS_CERTBOT_PATH" \
+                --logs-dir "$FMS_LOG_PATH" >/dev/null 2>&1 || true
+        fi
+    fi
 }
 
 # Cleanup DNS provider credentials
@@ -414,12 +444,13 @@ request_certificate() {
     certbot_cmd="$certbot_cmd --work-dir \"$FMS_CERTBOT_PATH\""
     certbot_cmd="$certbot_cmd --logs-dir \"$FMS_LOG_PATH\""
     
-    # Add staging flag if staging mode (default)
-    if [[ "$LIVE" != "true" ]]; then
-        certbot_cmd="$certbot_cmd --staging"
-        log_info "Using Let's Encrypt staging environment add --live to use production environment"
-    else
+    # Add explicit ACME server based on environment
+    if [[ "$LIVE" == "true" ]]; then
+        certbot_cmd="$certbot_cmd --server $PROD_SERVER_URL"
         log_info "Using Let's Encrypt production environment"
+    else
+        certbot_cmd="$certbot_cmd --server $STAGING_SERVER_URL"
+        log_info "Using Let's Encrypt staging environment add --live to use production environment"
     fi
     
     # Execute certbot
@@ -483,9 +514,13 @@ renew_certificate() {
         log_info "Force renewal requested"
     fi
     
-    # Add staging flag if staging mode (default)
-    if [[ "$LIVE" != "true" ]]; then
-        certbot_cmd="$certbot_cmd --staging"
+    # Add explicit ACME server based on environment (renew uses lineage's server; this is informational/consistent)
+    if [[ "$LIVE" == "true" ]]; then
+        certbot_cmd="$certbot_cmd --server $PROD_SERVER_URL"
+        log_info "Target environment: production"
+    else
+        certbot_cmd="$certbot_cmd --server $STAGING_SERVER_URL"
+        log_info "Target environment: staging"
     fi
     
     # Execute certbot
@@ -802,7 +837,9 @@ main() {
     fi
     
     # Determine action
-    if [[ "$state_changed" == "true" ]] && [[ "$FORCE_RENEW" != "true" ]]; then
+    if [[ "$state_changed" == "true" ]]; then
+        # Always request a new certificate when environment/hostname changed,
+        # even if --force-renew is set, to avoid reusing the wrong ACME server.
         action="request"
         log_info "State changed - requesting new certificate"
     elif certificate_exists "$DOMAIN_NAME"; then
@@ -828,6 +865,8 @@ main() {
     # Execute action
     case "$action" in
         "request")
+            # Ensure lineage matches target environment; delete existing lineage if ACME server differs
+            ensure_lineage_matches_environment "$DOMAIN_NAME"
             if request_certificate "$DOMAIN_NAME" "$EMAIL"; then
                 if import_certificate "$DOMAIN_NAME"; then
                     # Update state after successful request
