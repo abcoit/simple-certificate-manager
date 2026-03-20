@@ -7,7 +7,7 @@
 set -euo pipefail
 
 # Script metadata
-SCRIPT_VERSION="1.0.0"
+SCRIPT_VERSION="1.0.1"
 SCRIPT_NAME="simple-certificate-manager"
 SCRIPT_AUTHOR="Daniel Smith"
 SCRIPT_GITHUB="https://github.com/DanSmith888/simple-certificate-manager"
@@ -220,6 +220,22 @@ ensure_lineage_matches_environment() {
     fi
 }
 
+# Older versions could mark a cert as non-renewable; flip that back on so renew works.
+ensure_lineage_autorenew_enabled() {
+    local hostname="$1"
+    local renewal_conf="$FMS_CERTBOT_PATH/renewal/$hostname.conf"
+
+    if [[ ! -f "$renewal_conf" ]]; then
+        return 0
+    fi
+
+    if grep -Eq '^[[:space:]]*autorenew[[:space:]]*=[[:space:]]*False([[:space:]]*)$' "$renewal_conf"; then
+        log_info "Legacy autorenew=False found for '$hostname'; enabling renewals in renewal config"
+        sed -i -E 's/^[[:space:]]*autorenew[[:space:]]*=[[:space:]]*False([[:space:]]*)$/autorenew = True/' "$renewal_conf"
+        log_success "Updated renewal config: autorenew = True"
+    fi
+}
+
 # Cleanup DNS provider credentials
 cleanup_dns_credentials() {
     log_info "Cleaning up $DNS_PROVIDER credentials..."
@@ -345,13 +361,13 @@ certificate_exists() {
     fi
 }
 
-# Get certificate expiry info
+# Get certificate expiry info (human-readable notAfter= value only)
 get_cert_expiry() {
     local hostname="$1"
     local cert_file="$FMS_CERTBOT_PATH/live/$hostname/fullchain.pem"
     
     if [[ -f "$cert_file" ]]; then
-        openssl x509 -in "$cert_file" -noout -dates | grep "notAfter" | cut -d= -f2
+        openssl x509 -in "$cert_file" -noout -enddate 2>/dev/null | cut -d= -f2- | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
     else
         echo ""
     fi
@@ -388,23 +404,36 @@ certificate_was_renewed() {
 # Check if certificate needs renewal
 cert_needs_renewal() {
     local hostname="$1"
-    local expiry_date=$(get_cert_expiry "$hostname")
-    
-    if [[ -z "$expiry_date" ]]; then
+    local cert_file="$FMS_CERTBOT_PATH/live/$hostname/fullchain.pem"
+    local expiry_date
+
+    if [[ ! -f "$cert_file" ]]; then
         return 1
     fi
-    
-    # Check if certificate expires within 30 days
-    local expiry_timestamp=$(date -d "$expiry_date" +%s 2>/dev/null || echo "0")
-    local current_timestamp=$(date +%s)
-    local days_until_expiry=$(( (expiry_timestamp - current_timestamp) / 86400 ))
-    
-    log_debug "Certificate expires in $days_until_expiry days"
-    
-    if [[ $days_until_expiry -lt 30 ]]; then
-        return 0
-    else
+
+    expiry_date=$(get_cert_expiry "$hostname")
+    if [[ -z "$expiry_date" ]]; then
+        log_debug "Could not read certificate notAfter"
         return 1
+    fi
+
+    # Debug-only: days until expiry (openssl makes the real decision below; date parsing is flaky across locale/TZ).
+    local expiry_timestamp
+    expiry_timestamp=$(LC_ALL=C date -u -d "$expiry_date" +%s 2>/dev/null || true)
+    if [[ -n "${expiry_timestamp:-}" ]]; then
+        local current_timestamp
+        current_timestamp=$(LC_ALL=C date -u +%s)
+        local days_until_expiry=$(( (expiry_timestamp - current_timestamp) / 86400 ))
+        log_debug "Certificate expires in $days_until_expiry days (notAfter: $expiry_date)"
+    else
+        log_debug "Could not parse notAfter for day count (notAfter: $expiry_date); using openssl -checkend"
+    fi
+
+    # Exit 0 if the cert is still valid for more than 30 days; nonzero if it expires sooner (or is already expired).
+    if openssl x509 -in "$cert_file" -noout -checkend $((30 * 86400)) 2>/dev/null; then
+        return 1
+    else
+        return 0
     fi
 }
 
@@ -437,7 +466,6 @@ request_certificate() {
     esac
     
     certbot_cmd="$certbot_cmd --agree-tos --non-interactive"
-    certbot_cmd="$certbot_cmd --no-autorenew"
     certbot_cmd="$certbot_cmd --email $email"
     certbot_cmd="$certbot_cmd -d $hostname"
     certbot_cmd="$certbot_cmd --config-dir \"$FMS_CERTBOT_PATH\""
@@ -503,7 +531,6 @@ renew_certificate() {
     
     certbot_cmd="$certbot_cmd --agree-tos --non-interactive"
     certbot_cmd="$certbot_cmd --cert-name $hostname"
-    certbot_cmd="$certbot_cmd --no-autorenew"
     certbot_cmd="$certbot_cmd --config-dir \"$FMS_CERTBOT_PATH\""
     certbot_cmd="$certbot_cmd --work-dir \"$FMS_CERTBOT_PATH\""
     certbot_cmd="$certbot_cmd --logs-dir \"$FMS_LOG_PATH\""
@@ -526,7 +553,7 @@ renew_certificate() {
     # Execute certbot
     log_debug "Running: $certbot_cmd"
     if eval "$certbot_cmd"; then
-        log_success "Certificate renewed successfully"
+        log_info "Certbot renew completed successfully (certificate may or may not have been reissued)"
         return 0
     else
         log_error "Certificate renewal failed"
@@ -887,6 +914,7 @@ main() {
             fi
             ;;
         "renew")
+            ensure_lineage_autorenew_enabled "$DOMAIN_NAME"
             if renew_certificate "$DOMAIN_NAME"; then
                 # Check if certificate was actually renewed
                 if certificate_was_renewed "$DOMAIN_NAME"; then
@@ -905,7 +933,7 @@ main() {
                         error_exit "Certificate import failed"
                     fi
                 else
-                    log_info "Certificate renewal skipped - certificate is still validno action needed"
+                    log_info "Certificate renewal skipped — certbot did not change the certificate (still within its renewal policy or no reissue needed)"
                     # Update state but don't import/restart
                     local current_fingerprint=$(get_cert_fingerprint "$DOMAIN_NAME")
                     write_state "$DOMAIN_NAME" "$EMAIL" "$current_staging" "true" "$current_fingerprint"

@@ -82,6 +82,10 @@ This same command works for:
 - Single weekly schedule prevents certificate expiration
 - **Everything stored in schedule**: All parameters, credentials, and settings are saved directly in the FileMaker schedule - easily backed up and restored with FileMaker Server exports
 
+**Renewal safety note**:
+- The script no longer uses Certbot's `--no-autorenew` flag, because it can mark a cert as non-renewable in Certbot's renewal config.
+- If an older certificate was created that way, the script now automatically flips that setting back so normal renewal works again.
+
 
 ### Staging vs Live Certificates
 
