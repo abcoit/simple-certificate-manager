@@ -129,7 +129,7 @@ This same command works for:
 | `--aws-access-key-id` | Yes* | AWS Access Key ID (required for Route53 DNS) |
 | `--aws-secret-key` | Yes* | AWS Secret Access Key (required for Route53 DNS) |
 | `--linode-token` | Yes* | Linode API token (required for Linode DNS) |
-| '--cf-token' | Yes* | Cloudflare Account API Token (requred, does not use the older User-based API token) |
+| `--cf-token` | Yes* | Cloudflare Account API Token (requred, does not use the older User-based API token) |
 | `--live` | No | Use live Let's Encrypt (default: staging) |
 | `--import-cert` | No | Import certificate to FileMaker Server using fmsadmin (default: false) |
 | `--restart-fms` | No | Restart FileMaker Server after import (only when --import-cert is set) |
