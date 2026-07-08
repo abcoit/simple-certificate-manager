@@ -291,19 +291,48 @@ get_dns_credentials() {
         "cloudflare")
             echo "For Cloudflare, you need an API token with DNS read/write permissions for the domain"
             echo "Create one at: https://dash.cloudflare.com/ and click on Manage Account > Account API tokens > Create a token"
+            echo "Enable Read/Edit for DNS and Zone DNS Settings"
+            echo "Make a note of both the Account ID and API Token."
+            echo "You will also need the account email for your Cloudflare Dashboard"
             echo
             while true; do
+                if [[ -n "${CF_EMAIL:-}" ]]; then
+                    read -p "Cloudflare Email [$CF_EMAIL]: " input_email
+                    CF_EMAIL="${input_id:-$CF_EMAIL}"
+                else
+                    read -p "Cloudflare Email: " CF_EMAIL
+                fi
+                if [[ -n "$CF_EMAIL" ]]; then
+                    break
+                else
+                    log_error "Email cannot be empty"
+                fi
+            done
+            while true; do
+                if [[ -n "${CF_ACCOUNT_ID:-}" ]]; then
+                    read -p "Cloudflare AccountID [$CF_ACCOUNT_ID]: " input_id
+                    CF_ACCOUNT_ID="${input_id:-$CF_ACCOUNT_ID}"
+                else
+                    read -p "Cloudflare AccountID: " CF_ACCOUNT_ID
+                fi
+                if [[ -n "$CF_ACCOUNT_ID" ]]; then
+                    break
+                else
+                    log_error "Account ID cannot be empty"
+                fi
+            done
+            while true; do
                 if [[ -n "${CF_TOKEN:-}" ]]; then
-                    read -p "Cloudflare API Token; " CF_TOKEN
-                    CF_TOKEN="$(input_token:-$CF_TOKEN)"
+                    read -p "CF Token [${CF__TOKEN:0:4}****]: " input_token
+                    CF_TOKEN="${input_token:-$CF_TOKEN}"
                 else
                     read -p "Cloudflare API Token: " CF_TOKEN
                 fi
-                if [[ -n "$CF_TOKEN" ]] then
-                    log_success "Cloudflare token provided"
+                if [[ -n "$CF_TOKEN" ]]; then
+                    log_success "Cloudflare credentials provided"
                     break
                 else
-                    log_error "API token cannot be empty"
+                    log_error "API Token cannot be empty"
                 fi
             done
             ;;
