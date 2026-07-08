@@ -1,10 +1,11 @@
 # Simple Certificate Manager for FileMaker Server
+# Forked and modifed to add Cloudflare DNS options 2026-07-08. Changed script URLs from DanSmith to this fork.
 
 **Simple Certificate Manager for FileMaker Server** lets you install and automate Let's Encrypt SSL certificates with a single command — using secure DNS validation and built-in FileMaker Server scheduling.
 
 ## Quick Install
 ```bash
-curl -fsSL https://raw.githubusercontent.com/DanSmith888/simple-certificate-manager/main/install.sh -o /tmp/install.sh && sudo bash /tmp/install.sh && rm /tmp/install.sh
+curl -fsSL https://raw.githubusercontent.com/abcoit/simple-certificate-manager/main/install.sh -o /tmp/install.sh && sudo bash /tmp/install.sh && rm /tmp/install.sh
 ```
 
 ## What It Does
@@ -23,7 +24,7 @@ This script replaces all of that with one automated workflow using DNS validatio
 - **One-line install** – interactive setup handles everything  
 - **Automatic renewals** – managed directly by FileMaker Server’s scheduler  
 - **DNS challenge only** – no need to expose ports 80/443  
-- **Multi-provider support** – works with DigitalOcean, AWS Route53, and Linode  
+- **Multi-provider support** – works with DigitalOcean, AWS Route53, Linode, Cloudflare  
 - **Container-friendly** – runs inside Docker or LXC without `snap` dependencies  
 - **Smart state management** – remembers hostname/environment and certificate fingerprint; supports hostname changes and forced renewals; automatically chooses the right action so you dont need to use certbot directly. 
 
@@ -123,11 +124,12 @@ This same command works for:
 |-----------|----------|-------------|
 | `--hostname` | Yes | Domain name for the certificate |
 | `--email` | Yes | Email for Let's Encrypt notifications |
-| `--dns-provider` | Yes | DNS provider: `digitalocean`, `route53`, or `linode` |
+| `--dns-provider` | Yes | DNS provider: `digitalocean`, `route53`, 'cloudflare' or `linode` |
 | `--do-token` | Yes* | DigitalOcean API token (required for DigitalOcean DNS) |
 | `--aws-access-key-id` | Yes* | AWS Access Key ID (required for Route53 DNS) |
 | `--aws-secret-key` | Yes* | AWS Secret Access Key (required for Route53 DNS) |
 | `--linode-token` | Yes* | Linode API token (required for Linode DNS) |
+| '--cf-token' | Yes* | Cloudflare Account API Token (requred, does not use the older User-based API token) |
 | `--live` | No | Use live Let's Encrypt (default: staging) |
 | `--import-cert` | No | Import certificate to FileMaker Server using fmsadmin (default: false) |
 | `--restart-fms` | No | Restart FileMaker Server after import (only when --import-cert is set) |
@@ -145,7 +147,7 @@ This same command works for:
 ## Quick Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/DanSmith888/simple-certificate-manager/main/install.sh -o /tmp/install.sh && sudo bash /tmp/install.sh && rm /tmp/install.sh
+curl -fsSL https://raw.githubusercontent.com/abcoit/simple-certificate-manager/main/install.sh -o /tmp/install.sh && sudo bash /tmp/install.sh && rm /tmp/install.sh
 ```
 
 This interactive installer will:
@@ -164,6 +166,7 @@ Choose one:
 - **DigitalOcean** - API token with DNS permissions
 - **AWS Route53** - IAM user with Route53 permissions
 - **Linode** - API token with DNS permissions
+- **Cloudflare** - Account API token with DNS read/write permissions
 
 ## Requirements
 
