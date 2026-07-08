@@ -3,6 +3,8 @@
 # FileMaker Server Certificate Manager Installer
 # Installs the certificate manager script and dependencies for Let's Encrypt DNS challenge
 # Supports DigitalOcean, AWS Route53, and Linode DNS providers
+# Forked for script validation reasons
+# Add support for Cloudflare DNS
 
 set -euo pipefail
 
@@ -13,7 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 SCRIPT_VERSION="1.0.0"
 SCRIPT_NAME="FileMaker Server Certificate Manager Installer"
 SCRIPT_AUTHOR="Daniel Smith"
-SCRIPT_GITHUB="https://github.com/DanSmith888/simple-certificate-manager"
+SCRIPT_GITHUB="https://github.com/abcoit/simple-certificate-manager"
 
 # Colors for output
 RED='\033[0;31m'
@@ -64,7 +66,7 @@ show_welcome() {
     echo "• Installs all required dependencies"
     echo
     echo -e "${BOLD}How to use:${NC}"
-    echo "curl -fsSL https://raw.githubusercontent.com/DanSmith888/simple-certificate-manager/main/install.sh -o /tmp/install.sh && sudo bash /tmp/install.sh && rm /tmp/install.sh"
+    echo "curl -fsSL https://raw.githubusercontent.com/abcoit/simple-certificate-manager/main/install.sh -o /tmp/install.sh && sudo bash /tmp/install.sh && rm /tmp/install.sh"
     echo
     echo -e "${YELLOW}This script will:${NC}"
     echo "1. Check system requirements"
@@ -157,9 +159,10 @@ select_dns_provider() {
     echo "1) DigitalOcean"
     echo "2) AWS Route53"
     echo "3) Linode"
+    echo "4) Cloudflare"
     echo
     while true; do
-        read -p "Enter your choice (1-3): " choice
+        read -p "Enter your choice (1-4): " choice
         case $choice in
             1)
                 DNS_PROVIDER="digitalocean"
@@ -176,8 +179,13 @@ select_dns_provider() {
                 log_success "Selected Linode DNS"
                 break
                 ;;
+            4)
+                DNS_PROVIDER="cloudflare"
+                log_success "Selected Cloudflare DNS"
+                break
+                ;;
             *)
-                log_error "Invalid choice. Please enter 1, 2, or 3."
+                log_error "Invalid choice. Please enter an option between 1-4."
                 ;;
         esac
     done
@@ -280,6 +288,25 @@ get_dns_credentials() {
                 fi
             done
             ;;
+        "cloudflare")
+            echo "For Cloudflare, you need an API token with DNS read/write permissions for the domain"
+            echo "Create one at: https://dash.cloudflare.com/ and click on Manage Account > Account API tokens > Create a token"
+            echo
+            while true; do
+                if [[ -n "${CF_TOKEN:-}" ]]; then
+                    read -p "Cloudflare API Token; " CF_TOKEN
+                    CF_TOKEN="$(input_token:-$CF_TOKEN)"
+                else
+                    read -p "Cloudflare API Token: " CF_TOKEN
+                fi
+                if [[ -n "$CF_TOKEN" ]] then
+                    log_success "Cloudflare token provided"
+                    break
+                else
+                    log_error "API token cannot be empty"
+                fi
+            done
+            ;;
     esac
 }
 
@@ -320,6 +347,14 @@ EOF
             export AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID"
             export AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY"
             ;;
+        "cloudflare")
+            # Looks like cloudflare uses .ini file. https://deepwiki.com/cloudflare/certbot-dns-cloudflare/2.1-configuration
+            temp_creds="/tmp/cf-test.ini"
+            cat > "$temp_creds" << EOF
+dns_cloudflare_token = $CF_TOKEN
+EOF
+            chmod 600 "$temp_creds"
+            ;;
     esac
     
     # Build certbot command
@@ -335,6 +370,9 @@ EOF
             ;;
         "linode")
             certbot_cmd="$certbot_cmd --dns-linode --dns-linode-credentials $temp_creds"
+            ;;
+        "cloudflare")
+            certbot_cmd="$certbot_cmd --dns-cloudflare --dns-cloudflare-credentials $temp_creds"
             ;;
     esac
     
@@ -427,6 +465,9 @@ install_packages() {
         "linode")
             apt install -y certbot python3-certbot-dns-linode curl openssl jq
             ;;
+        "cloudflare")
+            apt install -y certbot python3-certbot-dns-cloudflare curl openssl jq
+            ;;
     esac
     
     log_success "Packages installed successfully"
@@ -450,7 +491,7 @@ install_certificate_manager() {
     
     # Download the script
     log_info "Downloading certificate manager script..."
-    if curl -sSL "https://raw.githubusercontent.com/DanSmith888/simple-certificate-manager/main/simple-certificate-manager.sh" -o "$script_dir/simple-certificate-manager.sh"; then
+    if curl -sSL "https://raw.githubusercontent.com/abcoit/simple-certificate-manager/main/simple-certificate-manager.sh" -o "$script_dir/simple-certificate-manager.sh"; then
         log_success "Script downloaded successfully"
     else
         log_error "Failed to download script"
@@ -622,6 +663,15 @@ setup_fms_schedule() {
             echo "  --fms-password $FMS_PASSWORD \\"
             echo "  --import-cert --restart-fms"
             ;;
+        "cloudflare")
+            echo " --hostname $DOMAIN_NAME \\"
+            echo " --email $EMAIL \\"
+            echo " --dns-provider cloudflare \\"
+            echo " --cf-token $CF_TOKEN \\"
+            echo " --fms-username $FMS_USERNAME \\"
+            echo " --fms-password $FMS_PASSWORD \\"
+            echo " --import-cert --restart-fms"
+            ;;
     esac
     echo
     echo -e "${YELLOW}Note: Currently configured in staging mode. Test the schedule manually first.${NC}"
@@ -691,6 +741,9 @@ setup_fms_schedule() {
             ;;
         "linode")
             script_params="--hostname $DOMAIN_NAME --email $EMAIL --dns-provider linode --linode-token $LINODE_TOKEN --fms-username $FMS_USERNAME --fms-password $FMS_PASSWORD --import-cert --restart-fms"
+            ;;
+        "cloudflare")
+            script_params="--hostname $DOMAIN_NAME --email $EMAIL --dns-provider cloudflare --cf-token $CF_TOKEN --fms-username $FMS_USERNAME --fms-password $FMS_PASSWORD --import-cert --restart-fms"
             ;;
     esac
     
@@ -768,6 +821,9 @@ EOF
                 ;;
             "linode")
                 echo "  --linode-token $LINODE_TOKEN"
+                ;;
+            "cloudflare")
+                echo " --cf-token $CF_TOKEN"
                 ;;
         esac
         echo "  --fms-username $FMS_USERNAME"
@@ -917,6 +973,8 @@ show_completion() {
     echo
     echo "Made in Australia by Daniel Smith"
     echo "https://github.com/DanSmith888"
+    echo "Fork and Cloudflare additions by Rob Lyons"
+    echo "https://github.com/abcoit"
     echo
     log_success "Happy certificate managing!"
 }
