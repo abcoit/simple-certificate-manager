@@ -61,7 +61,7 @@ show_welcome() {
     echo
     echo -e "${BOLD}What this script does:${NC}"
     echo "• Installs Let's Encrypt certificate management for FileMaker Server"
-    echo "• Sets up DNS challenge support for DigitalOcean, AWS Route53, or Linode"
+    echo "• Sets up DNS challenge support for DigitalOcean, AWS Route53, Cloudflare or Linode"
     echo "• Downloads and configures the certificate manager script"
     echo "• Installs all required dependencies"
     echo
