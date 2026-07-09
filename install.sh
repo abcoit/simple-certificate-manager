@@ -294,12 +294,12 @@ get_dns_credentials() {
             echo
             while true; do
                 if [[ -n "${CF_TOKEN:-}" ]]; then
-                    read -p "Cloudflare API Token; " CF_TOKEN
-                    CF_TOKEN="$(input_token:-$CF_TOKEN)"
+                    read -p "Cloudflare API Token [$CF_TOKEN]: " input_token
+                    CF_TOKEN="${input_token:-$CF_TOKEN}"
                 else
                     read -p "Cloudflare API Token: " CF_TOKEN
                 fi
-                if [[ -n "$CF_TOKEN" ]] then
+                if [[ -n "$CF_TOKEN" ]]; then
                     log_success "Cloudflare token provided"
                     break
                 else
