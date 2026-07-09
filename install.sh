@@ -2,7 +2,7 @@
 
 # FileMaker Server Certificate Manager Installer
 # Installs the certificate manager script and dependencies for Let's Encrypt DNS challenge
-# Supports DigitalOcean, AWS Route53, and Linode DNS providers
+# Supports DigitalOcean, AWS Route53, Cloudflare and Linode DNS providers
 # Forked for script validation reasons
 # Add support for Cloudflare DNS
 
