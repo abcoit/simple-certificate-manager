@@ -202,7 +202,7 @@ EOF
         "cloudflare")
             local dns_ini="/etc/certbot/cloudflare.ini"
             cat > "$dns_ini" << EOF
-dns_cloudflare_token = $CF_TOKEN
+dns_cloudflare_api_token = $CF_TOKEN
 EOF
             chmod 600 "$dns_ini"
             log_success "Cloudflare credentials configured"
