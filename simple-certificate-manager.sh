@@ -755,7 +755,7 @@ parse_arguments() {
                 LINODE_TOKEN="$2"
                 shift 2
                 ;;
-            --cloudflare-token)
+            --cf-token)
                 CF_TOKEN="$2"
                 shift 2
                 ;;
