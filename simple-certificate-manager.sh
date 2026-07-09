@@ -625,9 +625,9 @@ import_certificate() {
     chmod 600 "$key_file"
     
     # Import certificate
-    # Haiving issues with keyfile password. Temporarily comment out next line and rewrite new line for testing.
+    # Having issues with keyfile password. Temporarily comment out next line and rewrite new line for testing.
     # if fmsadmin certificate import "$cert_file" --keyfile "$key_file" -y -u "$FMS_USERNAME" -p "$FMS_PASSWORD" >> "$FMS_LOG_PATH/fms-import.log" 2>&1; then
-    if fmsadmin certificate import "$cert_file" --keyfile "$key_file" -y >> "$FMS_LOG_PATH/fms-import.log" 2>&1; then
+    if fmsadmin certificate import "$cert_file" --keyfile "$key_file" -y -u "$FMS_USERNAME" >> "$FMS_LOG_PATH/fms-import.log" 2>&1; then
         log_success "Certificate imported successfully"
         return 0
     else
