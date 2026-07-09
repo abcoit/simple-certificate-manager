@@ -1,4 +1,5 @@
 #!/bin/bash
+set -x #enable debugging
 
 # FileMaker Server Certificate Manager
 # Unified script for Let's Encrypt certificate management with DigitalOcean DNS
