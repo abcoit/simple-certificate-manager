@@ -351,7 +351,7 @@ EOF
             # Looks like cloudflare uses .ini file. https://deepwiki.com/cloudflare/certbot-dns-cloudflare/2.1-configuration
             temp_creds="/tmp/cf-test.ini"
             cat > "$temp_creds" << EOF
-dns_cloudflare_token = $CF_TOKEN
+dns_cloudflare_api_token = $CF_TOKEN
 EOF
             chmod 600 "$temp_creds"
             ;;
