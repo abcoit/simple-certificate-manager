@@ -293,7 +293,7 @@ get_dns_credentials() {
             echo "Create one at: https://dash.cloudflare.com/ and click on Manage Account > Account API tokens > Create a token"
             echo
             while true; do
-                if [[ -n "$CF_EMAIL:-}" ]]; then
+                if [[ -n "${CF_EMAIL:-}" ]]; then
                     read -p "Cloudflare Email [$CF_EMAIL]: " input_email
                     CF_EMAIL="${input_email:-$CF_EMAIL}"
                 else
