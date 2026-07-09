@@ -293,6 +293,19 @@ get_dns_credentials() {
             echo "Create one at: https://dash.cloudflare.com/ and click on Manage Account > Account API tokens > Create a token"
             echo
             while true; do
+                if [[ -n "$CF_EMAIL:-}" ]]; then
+                    read -p "Cloudflare Email [$CF_EMAIL]: " input_email
+                    CF_EMAIL="${input_email:-$CF_EMAIL}"
+                else
+                    read -p "Cloudflare Email: " CF_EMAIL
+                fi
+                if [[ -n "$CF_EMAIL" ]]; then
+                    break
+                else
+                    log_error "Email cannot be empty"
+                fi
+            done
+            while true; do
                 if [[ -n "${CF_TOKEN:-}" ]]; then
                     read -p "Cloudflare API Token [$CF_TOKEN]: " input_token
                     CF_TOKEN="${input_token:-$CF_TOKEN}"
@@ -351,7 +364,8 @@ EOF
             # Looks like cloudflare uses .ini file. https://deepwiki.com/cloudflare/certbot-dns-cloudflare/2.1-configuration
             temp_creds="/tmp/cf-test.ini"
             cat > "$temp_creds" << EOF
-dns_cloudflare_api_token = $CF_TOKEN
+dns_cloudflare_api_key = $CF_TOKEN
+dns_cloudflare_email = $CF_EMAIL
 EOF
             chmod 600 "$temp_creds"
             ;;
