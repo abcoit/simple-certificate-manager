@@ -860,7 +860,7 @@ validate_parameters() {
             fi
             ;;
         *)
-            errors+=("--dns-provider must be 'digitalocean', 'route53', or 'linode'")
+            errors+=("--dns-provider must be 'digitalocean', 'route53', 'cloudflare' or 'linode'")
             ;;
     esac
     
