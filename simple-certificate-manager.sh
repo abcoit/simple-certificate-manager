@@ -11,6 +11,9 @@ SCRIPT_VERSION="1.0.1"
 SCRIPT_NAME="simple-certificate-manager"
 SCRIPT_AUTHOR="Daniel Smith"
 SCRIPT_GITHUB="https://github.com/DanSmith888/simple-certificate-manager"
+MOD_SCRIPT_VERSION="1.0"
+MOD_SCRIPT_AUTHOR="Rob Lyons"
+MOD_SCRIPT_GITHUB="https://github.com/abco.it/simple-certificate-manager"
 
 # Colors for output
 RED='\033[0;31m'
@@ -26,7 +29,7 @@ IMPORT_CERT=false
 RESTART_FMS=false
 STAGING=true
 LIVE=false
-DNS_PROVIDER=""  # Will be set by --dns-provider parameter (digitalocean, route53, or linode)
+DNS_PROVIDER=""  # Will be set by --dns-provider parameter (digitalocean, route53, cloudflare, or linode)
 
 # ACME server endpoints
 PROD_SERVER_URL="https://acme-v02.api.letsencrypt.org/directory"
@@ -126,6 +129,11 @@ check_dependencies() {
                 error_exit "Linode DNS plugin is not installed. Please run: sudo apt install python3-certbot-dns-linode"
             fi
             ;;
+        "cloudflare")
+            if ! certbot plugins | grep -q dns-cloudflare; then
+                error_exit "Cloudflare DNS plugin is not installed. Please run; sudo apt install python3-cerbot-dns-cloudflare"
+            fi
+            ;;
         *)
             error_exit "Unsupported DNS provider: $DNS_PROVIDER. Supported providers: digitalocean, route53, linode"
             ;;
@@ -190,6 +198,14 @@ dns_linode_key = $LINODE_TOKEN
 EOF
             chmod 600 "$dns_ini"
             log_success "Linode credentials configured"
+            ;;
+        "cloudflare")
+            local dns_ini="/etc/certbot/cloudflare.ini"
+            cat > "$dns_ini" << EOF
+dns_cloudflare_token = $CF_TOKEN
+EOF
+            chmod 600 "$dns_ini"
+            log_success "Cloudflare credentials configured"
             ;;
     esac
 }
@@ -263,6 +279,14 @@ cleanup_dns_credentials() {
                 log_success "Linode credentials cleaned up"
             fi
             ;;
+        "cloudflare")
+            local dns_ini="/etc/certbot/cloudflare.ini"
+            # Remove credentials file
+            if [[ -f "$dns_ini" ]] then
+                rm -f "$dns_ini"
+                log_success "Cloudflare credentials cleaned up"
+            fi
+            ;;
     esac
 }
 
@@ -285,6 +309,10 @@ cleanup_all() {
     if [[ -f "/etc/certbot/route53.ini" ]]; then
         rm -f "/etc/certbot/route53.ini"
         echo "[SUCCESS] Removed: /etc/certbot/route53.ini"
+    fi
+    if [[ -f "/etc/certbot/cloudflare.ini" ]] then
+        rm -f "/etc/certbot/cloudflare.ini"
+        echo "[SUCCESS] Removed: /etc/certbot/cloudflare.ini"
     fi
     
     echo "[SUCCESS] Cleanup complete! FileMaker Server certbot files have been removed."
@@ -463,6 +491,10 @@ request_certificate() {
             certbot_cmd="$certbot_cmd --dns-linode"
             certbot_cmd="$certbot_cmd --dns-linode-credentials /etc/certbot/linode.ini"
             ;;
+        "cloudflare")
+            certbot_cmd="$certbot_cmd --dns-cloudflare"
+            certbot_cmd="$certbot_cmd --dns-cloudflare-credentials /etc/certbot/cloudflare.ini"
+            ;;
     esac
     
     certbot_cmd="$certbot_cmd --agree-tos --non-interactive"
@@ -526,6 +558,10 @@ renew_certificate() {
         "linode")
             certbot_cmd="$certbot_cmd --dns-linode"
             certbot_cmd="$certbot_cmd --dns-linode-credentials /etc/certbot/linode.ini"
+            ;;
+        "cloudflare")
+            certbot_cmd="$certbot_cmd --dns-cloudflare"
+            certbot_cmd="$certbot_cmd --dns-cloudflare-credentials /etc/certbot/cloudflare.ini"
             ;;
     esac
     
@@ -631,6 +667,8 @@ $SCRIPT_NAME v$SCRIPT_VERSION
 
 Author: $SCRIPT_AUTHOR
 GitHub: $SCRIPT_GITHUB
+Cloudflare Modifications: $MOD_SCRIPT_AUTHOR
+Cloudflare Mod Github: $MOD_SCRIPT_GITHUB
 
 A unified script for Let's Encrypt certificate management with DigitalOcean DNS
 for FileMaker Server. Supports both certificate requests and renewals with
@@ -652,13 +690,14 @@ REQUIRED OPTIONS:
     --email EMAIL          Email for Let's Encrypt notifications
     --fms-username USER     FileMaker Admin Console username
     --fms-password PASS     FileMaker Admin Console password
-    --dns-provider PROVIDER DNS provider: digitalocean, route53, or linode
+    --dns-provider PROVIDER DNS provider: digitalocean, route53, cloudflare, or linode
 
 DNS PROVIDER OPTIONS (choose one):
     --do-token TOKEN        DigitalOcean API token (for DigitalOcean DNS)
     --aws-access-key-id KEY AWS Access Key ID (for Route53 DNS)
     --aws-secret-key KEY    AWS Secret Access Key (for Route53 DNS)
     --linode-token TOKEN    Linode API token (for Linode DNS)
+    --cf-token TOKEN        Cloudflare API Token (for Cloudflare DNS)
 
 OPTIONAL OPTIONS:
     --live                  Use Let's Encrypt production environment (default: staging)
@@ -714,6 +753,10 @@ parse_arguments() {
                 ;;
             --linode-token)
                 LINODE_TOKEN="$2"
+                shift 2
+                ;;
+            --cloudflare-token)
+                CF_TOKEN="$2"
                 shift 2
                 ;;
             --dns-provider)
@@ -809,6 +852,11 @@ validate_parameters() {
         "linode")
             if [[ -z "${LINODE_TOKEN:-}" ]]; then
                 errors+=("--linode-token is required for Linode DNS")
+            fi
+            ;;
+        "cloudflare")
+            if [[ -z "${CF_TOKEN:-}" ]]; then
+                errors+=("--cf-token is required for Cloudflare DNS")
             fi
             ;;
         *)
